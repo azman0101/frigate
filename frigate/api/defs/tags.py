@@ -13,3 +13,4 @@ class Tags(Enum):
     events = "Events"
     classification = "Classification"
     auth = "Auth"
+    audit = "Audit"

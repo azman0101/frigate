@@ -59,6 +59,7 @@ from frigate.models import (
     Timeline,
     Trigger,
     User,
+    AuditLog,
 )
 from frigate.object_detection.base import ObjectDetectProcess
 from frigate.output.output import OutputProcess
@@ -287,6 +288,7 @@ class FrigateApp:
             Timeline,
             User,
             Trigger,
+            AuditLog,
         ]
         self.db.bind(models)
 

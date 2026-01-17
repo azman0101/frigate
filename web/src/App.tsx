@@ -28,6 +28,7 @@ const UIPlayground = lazy(() => import("@/pages/UIPlayground"));
 const FaceLibrary = lazy(() => import("@/pages/FaceLibrary"));
 const Classification = lazy(() => import("@/pages/ClassificationModel"));
 const Logs = lazy(() => import("@/pages/Logs"));
+const AuditLog = lazy(() => import("@/pages/AuditLog"));
 const AccessDenied = lazy(() => import("@/pages/AccessDenied"));
 
 function App() {
@@ -99,6 +100,7 @@ function DefaultAppView() {
               <Route path="/explore" element={<Explore />} />
               <Route path="/export" element={<Exports />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/audit" element={<AuditLog />} />
             </Route>
             <Route element={<ProtectedRoute requiredRoles={["admin"]} />}>
               <Route path="/system" element={<System />} />

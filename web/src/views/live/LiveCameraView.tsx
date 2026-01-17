@@ -436,6 +436,44 @@ export default function LiveCameraView({
     [config, webRTC],
   );
 
+  // Audit Session Logging
+  useEffect(() => {
+    const startTime = Date.now() / 1000;
+
+    // Log start
+    axios
+      .post("audit/events", {
+        type: "live",
+        action: "view",
+        resource_id: camera.name,
+        start_time: startTime,
+        metadata: {
+          method: preferredLiveMode,
+          stream: streamName,
+        },
+      })
+      .catch((e) => console.error("Failed to log audit start", e));
+
+    return () => {
+      const endTime = Date.now() / 1000;
+      // Log end
+      axios
+        .post("audit/events", {
+          type: "live",
+          action: "view",
+          resource_id: camera.name,
+          start_time: startTime,
+          end_time: endTime,
+          metadata: {
+            method: preferredLiveMode,
+            stream: streamName,
+            duration: endTime - startTime,
+          },
+        })
+        .catch((e) => console.error("Failed to log audit end", e));
+    };
+  }, [camera.name, preferredLiveMode, streamName]);
+
   return (
     <TransformWrapper
       minScale={1.0}
