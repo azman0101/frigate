@@ -513,12 +513,7 @@ def all_recordings_summary(
     return JSONResponse(content=dict(sorted(days.items())))
 
 
-@router.get(
-    "/{camera_name}/recordings/summary", dependencies=[Depends(require_camera_access)]
-)
-async def recordings_summary(camera_name: str, timezone: str = "utc"):
-    """Returns hourly summary for recordings of given camera"""
-
+def _get_recordings_summary_data(camera_name: str, timezone: str = "utc"):
     time_range_query = (
         Recordings.select(
             fn.MIN(Recordings.start_time).alias("min_time"),
@@ -535,7 +530,7 @@ async def recordings_summary(camera_name: str, timezone: str = "utc"):
     days: dict[str, dict] = {}
 
     if min_time is None or max_time is None:
-        return JSONResponse(content=list(days.values()))
+        return list(days.values())
 
     dst_periods = get_dst_transitions(timezone, min_time, max_time)
 
@@ -616,7 +611,17 @@ async def recordings_summary(camera_name: str, timezone: str = "utc"):
                     "day": day,
                 }
 
-    return JSONResponse(content=list(days.values()))
+    return list(days.values())
+
+
+@router.get(
+    "/{camera_name}/recordings/summary", dependencies=[Depends(require_camera_access)]
+)
+async def recordings_summary(camera_name: str, timezone: str = "utc"):
+    """Returns hourly summary for recordings of given camera"""
+    return await asyncio.to_thread(
+        _get_recordings_summary_data, camera_name, timezone
+    )
 
 
 @router.get("/{camera_name}/recordings", dependencies=[Depends(require_camera_access)])
