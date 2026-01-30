@@ -56,8 +56,8 @@ class AuthConfig(FrigateBaseModel):
                     f"Invalid role name '{role}'. Must be alphanumeric with underscores."
                 )
 
-        # Ensure 'admin' and 'viewer' are not used as custom role names
-        reserved_roles = {"admin", "viewer"}
+        # Ensure 'admin', 'viewer' and 'auditor' are not used as custom role names
+        reserved_roles = {"admin", "viewer", "auditor"}
         if v.keys() & reserved_roles:
             raise ValueError(
                 f"Reserved roles {reserved_roles} cannot be used as custom roles."
@@ -74,8 +74,9 @@ class AuthConfig(FrigateBaseModel):
 
     @model_validator(mode="after")
     def ensure_default_roles(self):
-        # Ensure admin and viewer are never overridden
+        # Ensure admin, viewer and auditor are never overridden
         self.roles["admin"] = []
         self.roles["viewer"] = []
+        self.roles["auditor"] = []
 
         return self

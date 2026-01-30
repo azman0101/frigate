@@ -121,6 +121,44 @@ export function RecordingView({
     },
   ]);
 
+  // Audit Session Logging
+  useEffect(() => {
+    const sessionStart = Date.now() / 1000;
+
+    // Log start
+    axios
+      .post("audit/events", {
+        type: "recording",
+        action: "view",
+        resource_id: mainCamera,
+        start_time: sessionStart,
+        metadata: {
+          time_range_start: timeRange.after,
+          time_range_end: timeRange.before,
+        },
+      })
+      .catch((e) => console.error("Failed to log recording review start", e));
+
+    return () => {
+      const sessionEnd = Date.now() / 1000;
+      // Log end
+      axios
+        .post("audit/events", {
+          type: "recording",
+          action: "view",
+          resource_id: mainCamera,
+          start_time: sessionStart,
+          end_time: sessionEnd,
+          metadata: {
+            time_range_start: timeRange.after,
+            time_range_end: timeRange.before,
+            duration: sessionEnd - sessionStart,
+          },
+        })
+        .catch((e) => console.error("Failed to log recording review end", e));
+    };
+  }, [mainCamera, timeRange.after, timeRange.before]);
+
   // controller state
 
   const mainControllerRef = useRef<DynamicVideoController | null>(null);

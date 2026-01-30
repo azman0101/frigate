@@ -162,3 +162,14 @@ class Trigger(Model):
 
     class Meta:
         primary_key = CompositeKey("camera", "name")
+
+
+class AuditLog(Model):
+    id = CharField(null=False, primary_key=True, max_length=30)
+    user_id = CharField(null=False, index=True, max_length=30)
+    type = CharField(max_length=20, index=True)  # live, recording, event, config
+    action = CharField(max_length=20)  # view, download, update
+    resource_id = CharField(max_length=100)  # camera_name, event_id
+    start_time = DateTimeField(index=True)
+    end_time = DateTimeField(null=True)
+    metadata = JSONField(null=True)

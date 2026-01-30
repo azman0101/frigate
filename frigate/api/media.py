@@ -27,6 +27,7 @@ from frigate.api.auth import (
     get_allowed_cameras_for_filter,
     require_camera_access,
 )
+from frigate.util.audit import log_audit_event
 from frigate.api.defs.query.media_query_parameters import (
     Extension,
     MediaEventsSnapshotQueryParams,
@@ -72,15 +73,24 @@ async def mjpeg_feed(
         "regions": params.regions,
     }
     if camera_name in request.app.frigate_config.cameras:
+        user = request.headers.get("remote-user", "unknown")
+        log_audit_event(user, "live", "start", camera_name, {"protocol": "mjpeg"})
+
+        def logged_imagestream():
+            try:
+                yield from imagestream(
+                    request.app.detected_frames_processor,
+                    camera_name,
+                    params.fps,
+                    params.height,
+                    draw_options,
+                )
+            finally:
+                log_audit_event(user, "live", "end", camera_name, {"protocol": "mjpeg"})
+
         # return a multipart response
         return StreamingResponse(
-            imagestream(
-                request.app.detected_frames_processor,
-                camera_name,
-                params.fps,
-                params.height,
-                draw_options,
-            ),
+            logged_imagestream(),
             media_type="multipart/x-mixed-replace;boundary=frame",
         )
     else:
@@ -803,6 +813,11 @@ async def recording_clip(
             status_code=403,
         )
 
+    user = request.headers.get("remote-user", "unknown")
+    log_audit_event(
+        user, "recording", "download", camera_name, {"start": start_ts, "end": end_ts}
+    )
+
     config: FrigateConfig = request.app.frigate_config
 
     ffmpeg_cmd = [
@@ -838,11 +853,17 @@ async def recording_clip(
     description="Returns an HLS playlist for the specified timestamp-range on the specified camera. Append /master.m3u8 or /index.m3u8 for HLS playback.",
 )
 async def vod_ts(
+    request: Request,
     camera_name: str,
     start_ts: float,
     end_ts: float,
     force_discontinuity: bool = False,
 ):
+    user = request.headers.get("remote-user", "unknown")
+    log_audit_event(
+        user, "recording", "view", camera_name, {"start": start_ts, "end": end_ts}
+    )
+
     logger.debug(
         "VOD: Generating VOD for %s from %s to %s with force_discontinuity=%s",
         camera_name,
@@ -952,10 +973,17 @@ async def vod_ts(
     dependencies=[Depends(require_camera_access)],
     description="Returns an HLS playlist for the specified date-time on the specified camera. Append /master.m3u8 or /index.m3u8 for HLS playback.",
 )
-async def vod_hour_no_timezone(year_month: str, day: int, hour: int, camera_name: str):
+async def vod_hour_no_timezone(
+    request: Request, year_month: str, day: int, hour: int, camera_name: str
+):
     """VOD for specific hour. Uses the default timezone (UTC)."""
     return await vod_hour(
-        year_month, day, hour, camera_name, get_localzone_name().replace("/", ",")
+        request,
+        year_month,
+        day,
+        hour,
+        camera_name,
+        get_localzone_name().replace("/", ","),
     )
 
 
@@ -965,7 +993,12 @@ async def vod_hour_no_timezone(year_month: str, day: int, hour: int, camera_name
     description="Returns an HLS playlist for the specified date-time (with timezone) on the specified camera. Append /master.m3u8 or /index.m3u8 for HLS playback.",
 )
 async def vod_hour(
-    year_month: str, day: int, hour: int, camera_name: str, tz_name: str
+    request: Request,
+    year_month: str,
+    day: int,
+    hour: int,
+    camera_name: str,
+    tz_name: str,
 ):
     parts = year_month.split("-")
     start_date = (
@@ -976,7 +1009,7 @@ async def vod_hour(
     start_ts = start_date.timestamp()
     end_ts = end_date.timestamp()
 
-    return await vod_ts(camera_name, start_ts, end_ts)
+    return await vod_ts(request, camera_name, start_ts, end_ts)
 
 
 @router.get(
@@ -1008,7 +1041,7 @@ async def vod_event(
         if event.end_time is None
         else (event.end_time + padding)
     )
-    vod_response = await vod_ts(event.camera, event.start_time - padding, end_ts)
+    vod_response = await vod_ts(request, event.camera, event.start_time - padding, end_ts)
 
     # If the recordings are not found and the event started more than 5 minutes ago, set has_clip to false
     if (
@@ -1028,11 +1061,12 @@ async def vod_event(
     description="Returns an HLS playlist for a timestamp range with HLS discontinuity enabled. Append /master.m3u8 or /index.m3u8 for HLS playback.",
 )
 async def vod_clip(
+    request: Request,
     camera_name: str,
     start_ts: float,
     end_ts: float,
 ):
-    return await vod_ts(camera_name, start_ts, end_ts, force_discontinuity=True)
+    return await vod_ts(request, camera_name, start_ts, end_ts, force_discontinuity=True)
 
 
 @router.get(
@@ -1095,6 +1129,9 @@ async def event_snapshot(
             content={"success": False, "message": "Live frame not available"},
             status_code=404,
         )
+
+    user = request.headers.get("remote-user", "unknown")
+    log_audit_event(user, "event", "snapshot", event_id)
 
     headers = {
         "Content-Type": "image/jpeg",

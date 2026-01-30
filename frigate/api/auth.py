@@ -29,6 +29,7 @@ from frigate.api.defs.tags import Tags
 from frigate.config import AuthConfig, ProxyConfig
 from frigate.const import CONFIG_DIR, JWT_SECRET_ENV_VAR, PASSWORD_HASH_ALGORITHM
 from frigate.models import User
+from frigate.util.audit import log_audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -699,6 +700,33 @@ def auth(request: Request):
 
         success_response.headers["remote-user"] = user
         success_response.headers["remote-role"] = role
+
+        # Audit logging for live streams / direct access
+        original_url = request.headers.get("x-original-url", "")
+        if original_url:
+            if "/live/webrtc/api/ws" in original_url:
+                log_audit_event(
+                    user, "live", "view", "webrtc_stream", {"url": original_url}
+                )
+            elif "/live/mse/api/ws" in original_url:
+                log_audit_event(
+                    user, "live", "view", "mse_stream", {"url": original_url}
+                )
+            elif "master.m3u8" in original_url or "index.m3u8" in original_url:
+                log_audit_event(
+                    user, "recording", "view", "hls_playlist", {"url": original_url}
+                )
+            elif "latest.jpg" in original_url:
+                if "/api/" in original_url:
+                    try:
+                        parts = original_url.split("/api/")[1].split("/")
+                        if len(parts) > 0:
+                            log_audit_event(
+                                user, "live", "snapshot", parts[0], {"url": original_url}
+                            )
+                    except Exception:
+                        pass
+
         return success_response
     except Exception as e:
         logger.error(f"Error parsing jwt: {e}")
